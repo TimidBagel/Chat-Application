@@ -1,6 +1,6 @@
 use std::io::{self, Read, Write};
 use std::net::{TcpListener, TcpStream};
-use std::sync::mpsc::{channel, Sender, Receiver};
+use std::sync::mpsc::{channel};
 use std::thread;
 
 #[derive(Clone)]
@@ -22,33 +22,30 @@ fn main() {
 
     // let target_address: String = local_ip.clone() + &dest_port;
 
-    let contacts: Vec<Contact> = vec![];
+    let mut contacts: Vec<Contact> = vec![];
     
     handle_receiving(address);
 
-    input_loop(contacts.clone());
+    loop {
+        let input = get_input().trim().to_string();
+        if input == "help".to_string() {
+            print_help();
+        } else if input == "display contacts".to_string() {
+            print_contacts(contacts.clone());
+        } else if input == "add contact".to_string() {
+            contacts = add_contact(contacts);
+        } else if input == "send message".to_string() {
+            select_contact_for_chat(contacts.clone());
+        } else if input == "quit".to_string() {
+            break;
+        } else {
+            println!("'{}' not recognized as internal command.", input)
+        }
+    }
 
     println!("program ended");
 }
 
-fn input_loop(mut contacts: Vec<Contact>) {
-    let input = get_input().trim().to_string();
-    if input == "help".to_string() {
-        print_help();
-    } else if input == "display contacts".to_string() {
-        print_contacts(contacts.clone());
-    } else if input == "add contact".to_string() {
-        contacts = add_contact(contacts);
-    } else if input == "start chat".to_string() {
-        select_contact_for_chat(contacts.clone());
-    } else if input == "quit".to_string() {
-        return;
-    } else {
-        println!("'{}' not recognized as internal command.", input)
-    }
-
-    input_loop(contacts)
-}
 
 fn get_input() -> String {
     let mut input = String::new();
@@ -60,7 +57,7 @@ fn print_help() {
     println!("
     display contacts - prints saved contacts\n
     add contact      - starts add contact process\n
-    start chat       - starts a live chat with contact\n
+    send message     - send a message to contact\n
     quit             - quits program");
 }
 
@@ -107,35 +104,29 @@ fn select_contact_for_chat(contacts: Vec<Contact>) {
 
     for contact in contacts.clone() {
         if input == contact.name {
-            handle_sending(contact.address);
+            send_message(contact.address);
             return
         }
     }
 }
 
-fn handle_sending(destination_address: String) {
+fn send_message(destination_address: String) {
     let (sender, receiver) = channel::<String>();
-    thread::spawn(move || {
-        loop {
-            let message = match receiver.recv() {
-                Ok(msg) => msg,
-                Err(_) => break,
-            };
 
-            if let Ok(mut stream) = TcpStream::connect(&destination_address) {
-                if let Err(e) = stream.write_all(message.as_bytes()) {
-                    eprintln!("Error sending message: {}", e);
-                }
-            } else {
-                eprintln!("Failed to connect to sevrer at {}", destination_address);
+    thread::spawn(move || {
+        let input = get_input();
+        sender.send(input.trim().to_string()).unwrap();
+        let message = match receiver.recv() {
+            Ok(msg) => msg,
+            Err(_) => return,
+        };
+
+        if let Ok(mut stream) = TcpStream::connect(&destination_address) {
+            if let Err(e) = stream.write_all(message.as_bytes()) {
+                eprintln!("Error sending message: {}", e);
             }
-        }
-    });
-
-    thread::spawn(move || {
-        loop {
-            let input = get_input();
-            sender.send(input.trim().to_string()).unwrap();
+        } else {
+            eprintln!("Failed to connect to sevrer at {}", destination_address);
         }
     });
 }
