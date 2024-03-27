@@ -20,32 +20,34 @@ fn main() {
 
     println!("address: {}", address);
 
-    let (sender, receiver) = channel::<String>();
-
     // let target_address: String = local_ip.clone() + &dest_port;
 
-    let mut contacts: Vec<Contact> = vec![];
+    let contacts: Vec<Contact> = vec![];
     
     handle_receiving(address);
 
-    loop{
-        let input = get_input().trim().to_string();
-        if input == "help".to_string() {
-            print_help();
-        } else if input == "display contacts".to_string() {
-
-        } else if input == "add contact".to_string() {
-            
-        } else if input == "send message".to_string() {
-            
-        } else if input == "quit".to_string() {
-            break;
-        } else {
-            println!("'{}' not recognized as internal command.", input)
-        }
-    }
+    input_loop(contacts.clone());
 
     println!("program ended");
+}
+
+fn input_loop(mut contacts: Vec<Contact>) {
+    let input = get_input().trim().to_string();
+    if input == "help".to_string() {
+        print_help();
+    } else if input == "display contacts".to_string() {
+        print_contacts(contacts.clone());
+    } else if input == "add contact".to_string() {
+        contacts = add_contact(contacts);
+    } else if input == "start chat".to_string() {
+        select_contact_for_chat(contacts.clone());
+    } else if input == "quit".to_string() {
+        return;
+    } else {
+        println!("'{}' not recognized as internal command.", input)
+    }
+
+    input_loop(contacts)
 }
 
 fn get_input() -> String {
@@ -58,7 +60,7 @@ fn print_help() {
     println!("
     display contacts - prints saved contacts\n
     add contact      - starts add contact process\n
-    send message     - starts send message process\n
+    start chat       - starts a live chat with contact\n
     quit             - quits program");
 }
 
@@ -94,7 +96,25 @@ fn add_contact(mut contacts: Vec<Contact>) -> Vec<Contact> {
     return contacts
 }
 
-fn handle_sending(destination_address: String, sender: Sender<String>, receiver: Receiver<String>) {
+fn select_contact_for_chat(contacts: Vec<Contact>) {
+    print_contacts(contacts.clone());
+    println!("Enter contact name to start a chat or enter '_back':");
+    let input = get_input().trim().to_string();
+
+    if input == "_back".to_string() {
+        return
+    }
+
+    for contact in contacts.clone() {
+        if input == contact.name {
+            handle_sending(contact.address);
+            return
+        }
+    }
+}
+
+fn handle_sending(destination_address: String) {
+    let (sender, receiver) = channel::<String>();
     thread::spawn(move || {
         loop {
             let message = match receiver.recv() {
