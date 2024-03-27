@@ -5,32 +5,9 @@ use std::thread;
 
 
 fn main() {
+    let local_ip = "127.0.0.1:".to_string();
     println!("Enter your username: ");
     let _user = get_input().trim().to_string();
-    
-    let (listener, sender, receiver) = host_self();
-
-    handle_receiving(listener);
-
-    let mut contacts: Vec<Vec<String>> = vec![vec!["".to_string(); 2]; 10];
-    contacts = add_contact(contacts.clone());
-    contacts = add_contact(contacts.clone());
-
-    // handle_sending(target_address, sender.clone(), receiver);
-}
-
-fn get_input() -> String {
-    let mut input = String::new();
-    io::stdin().read_line(&mut input).expect("Failed to read line");
-    input
-}
-
-fn add_contact(contacts: Vec<Vec<String>>) -> Vec<Vec<String>> {
-    contacts
-}
-
-fn host_self() -> (TcpListener, Sender<String>, Receiver<String>) {
-    let local_ip = "127.0.0.1:".to_string();
     println!("Enter your port: ");
     let port = get_input().trim().to_string();
     let address: String = local_ip.clone() + &port;
@@ -41,7 +18,18 @@ fn host_self() -> (TcpListener, Sender<String>, Receiver<String>) {
 
     let listener = TcpListener::bind(&address).expect("Failed to bind to address");
 
-    (listener, sender, receiver)
+    println!("Enter the destination port: ");
+    let dest_port = get_input().trim().to_string();
+    let target_address: String = local_ip.clone() + &dest_port;
+
+    handle_sending(target_address, sender.clone(), receiver);
+    handle_receiving(listener);
+}
+
+fn get_input() -> String {
+    let mut input = String::new();
+    io::stdin().read_line(&mut input).expect("Failed to read line");
+    input
 }
 
 fn handle_sending(destination_address: String, sender: Sender<String>, receiver: Receiver<String>) {
