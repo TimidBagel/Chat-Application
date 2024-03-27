@@ -1,6 +1,6 @@
 use std::io::{self, Read, Write};
 use std::net::{TcpListener, TcpStream};
-use std::sync::mpsc::{channel};
+use std::sync::mpsc::channel;
 use std::thread;
 
 #[derive(Clone)]
@@ -113,22 +113,20 @@ fn select_contact_for_chat(contacts: Vec<Contact>) {
 fn send_message(destination_address: String) {
     let (sender, receiver) = channel::<String>();
 
-    thread::spawn(move || {
-        let input = get_input();
-        sender.send(input.trim().to_string()).unwrap();
-        let message = match receiver.recv() {
-            Ok(msg) => msg,
-            Err(_) => return,
-        };
+    let input = get_input();
+    sender.send(input.trim().to_string()).unwrap();
+    let message = match receiver.recv() {
+        Ok(msg) => msg,
+        Err(_) => return,
+    };
 
-        if let Ok(mut stream) = TcpStream::connect(&destination_address) {
-            if let Err(e) = stream.write_all(message.as_bytes()) {
-                eprintln!("Error sending message: {}", e);
-            }
-        } else {
-            eprintln!("Failed to connect to sevrer at {}", destination_address);
+    if let Ok(mut stream) = TcpStream::connect(&destination_address) {
+        if let Err(e) = stream.write_all(message.as_bytes()) {
+            eprintln!("Error sending message: {}", e);
         }
-    });
+    } else {
+        eprintln!("Failed to connect to sevrer at {}", destination_address);
+    }
 }
 
 fn handle_receiving(address: String) {
