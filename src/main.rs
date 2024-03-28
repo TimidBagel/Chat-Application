@@ -9,22 +9,34 @@ struct Contact {
     address: String,
 }
 
+/*
+    TO DO: 
+    - function for live chat
+    - more robust error handling
+    - message protocol
+    - better command input system
+    - handling typing and message receiving overlap
+ */
+
+// message protocol: sender_ip%%message
 
 fn main() {
     let local_ip = "127.0.0.1:".to_string();
+
     println!("Enter your username: ");
     let _user = get_input().trim().to_string();
+
     println!("Enter your port: ");
-    let port = get_input().trim().to_string();
-    let address: String = local_ip.clone() + &port;
+    let binding = get_input();
+    let port = binding.trim();
+
+    let address: String = local_ip.clone() + port;
 
     println!("address: {}", address);
 
-    // let target_address: String = local_ip.clone() + &dest_port;
-
     let mut contacts: Vec<Contact> = vec![];
     
-    handle_receiving(address);
+    handle_receiving(address.clone(), contacts.clone());
 
     loop {
         let input = get_input().trim().to_string();
@@ -35,7 +47,7 @@ fn main() {
         } else if input == "add contact".to_string() {
             contacts = add_contact(contacts);
         } else if input == "send message".to_string() {
-            select_contact_for_chat(contacts.clone());
+            select_contact_for_chat(address.clone(), contacts.clone());
         } else if input == "quit".to_string() {
             break;
         } else {
@@ -55,10 +67,10 @@ fn get_input() -> String {
 
 fn print_help() {
     println!("
-    display contacts - prints saved contacts\n
-    add contact      - starts add contact process\n
-    send message     - send a message to contact\n
-    quit             - quits program");
+display contacts - prints saved contacts
+add contact      - starts add contact process
+send message     - send a message to contact
+quit             - quits program");
 }
 
 fn print_contacts(contacts: Vec<Contact>) {
@@ -93,7 +105,7 @@ fn add_contact(mut contacts: Vec<Contact>) -> Vec<Contact> {
     return contacts
 }
 
-fn select_contact_for_chat(contacts: Vec<Contact>) {
+fn select_contact_for_chat(address: String, contacts: Vec<Contact>) {
     print_contacts(contacts.clone());
     println!("Enter contact name to start a chat or enter '_back':");
     let input = get_input().trim().to_string();
@@ -104,16 +116,16 @@ fn select_contact_for_chat(contacts: Vec<Contact>) {
 
     for contact in contacts.clone() {
         if input == contact.name {
-            send_message(contact.address);
+            send_message(address, contact.address);
             return
         }
     }
 }
 
-fn send_message(destination_address: String) {
+fn send_message(local_address: String, destination_address: String) {
     let (sender, receiver) = channel::<String>();
 
-    let input = get_input();
+    let input = local_address.to_owned() + "%%" + get_input().trim();
     sender.send(input.trim().to_string()).unwrap();
     let message = match receiver.recv() {
         Ok(msg) => msg,
@@ -129,21 +141,27 @@ fn send_message(destination_address: String) {
     }
 }
 
-fn handle_receiving(address: String) {
+fn handle_receiving(address: String, contacts: Vec<Contact>) {
     thread::spawn(move || {
         let listener = TcpListener::bind(&address).expect("Failed to bind to address");
         for stream in listener.incoming() {
             match stream {
                 Ok(mut stream) => {
-    
-                    // Spawn a thread to handle the client's message
-                    thread::spawn(move || {
-                            let mut buffer = [0; 1024];
-                            if let Ok(bytes_read) = stream.read(&mut buffer) {
-                                let received_message = String::from_utf8_lossy(&buffer[..bytes_read]);
-                                println!("Received message from other: {}", received_message);
+                        let mut buffer = [0; 1024];
+                        if let Ok(bytes_read) = stream.read(&mut buffer) {
+                            let received_message = String::from_utf8_lossy(&buffer[..bytes_read]);
+                            let contents: Vec<&str> = received_message.split("%%").collect();
+
+                            let mut sender = contents.get(0).expect("element not found").to_string();
+                            for contact in contacts.clone() {
+                                // does not work as intended. Can not find address in contacts
+                                if sender == contact.address {
+                                    sender = contact.name;
+                                    break;
+                                }
                             }
-                    });
+                            println!("Received message from {}: {}", sender, contents.get(1).expect("element not found").to_string());
+                        }
                 }
                 Err(e) => {
                     eprintln!("Error accepting connection: {}", e);
