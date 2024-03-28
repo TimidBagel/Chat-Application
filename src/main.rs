@@ -1,7 +1,9 @@
 use std::io::{self, Read, Write};
-use std::net::{TcpListener, TcpStream};
+use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::sync::mpsc::channel;
-use std::thread;
+use std::{result, thread};
+use regex::Regex;
+use std::time::Duration;
 
 #[derive(Clone)]
 struct Contact {
@@ -42,15 +44,23 @@ fn main() {
         let input = get_input().trim().to_string();
         if input == "help".to_string() {
             print_help();
-        } else if input == "display contacts".to_string() {
+        } 
+        else if input == "display contacts".to_string() {
             print_contacts(contacts.clone());
-        } else if input == "add contact".to_string() {
+        } 
+        else if input == "add contact".to_string() {
             contacts = add_contact(contacts);
-        } else if input == "send message".to_string() {
+        } 
+        else if input == "send message".to_string() {
             select_contact_for_chat(address.clone(), contacts.clone());
-        } else if input == "quit".to_string() {
+        } 
+        else if input == "quit".to_string() {
             break;
-        } else {
+        }
+        else if input == "ping".to_string() {
+            ping_other("127.0.0.1:8081".to_string(), 1);
+        }
+        else {
             println!("'{}' not recognized as internal command.", input)
         }
     }
@@ -58,6 +68,24 @@ fn main() {
     println!("program ended");
 }
 
+fn is_ip_addr(str: &str) -> bool{
+    let re = Regex::new(r"^\d+\.\d+\.\d+\.\d+:\d+$").unwrap();
+
+    if re.is_match(str) {
+        true
+    } else {
+        false
+    }
+}
+
+fn ping_other(destination_address: String, timeout: u64) -> bool {
+    let addr: SocketAddr = destination_address.parse().expect("Invalid address");
+
+    match TcpStream::connect_timeout(&addr, Duration::from_secs(timeout)) {
+        Ok(_) => {println!("Port is open"); true},
+        Err(_) => {println!("Port is closed"); false},
+    }
+}
 
 fn get_input() -> String {
     let mut input = String::new();
@@ -106,12 +134,16 @@ fn add_contact(mut contacts: Vec<Contact>) -> Vec<Contact> {
 }
 
 fn select_contact_for_chat(address: String, contacts: Vec<Contact>) {
-    print_contacts(contacts.clone());
-    println!("Enter contact name to start a chat or enter '_back':");
+    println!("Enter contact name or IP to send a message or enter '_back':");
     let input = get_input().trim().to_string();
 
     if input == "_back".to_string() {
         return
+    }
+
+    if is_ip_addr(&input) {
+        send_message(address, input);
+        return;
     }
 
     for contact in contacts.clone() {
@@ -120,6 +152,9 @@ fn select_contact_for_chat(address: String, contacts: Vec<Contact>) {
             return
         }
     }
+
+    println!("Input is not valid contact name or IP.");
+    select_contact_for_chat(address, contacts);
 }
 
 fn send_message(local_address: String, destination_address: String) {
@@ -147,21 +182,31 @@ fn handle_receiving(address: String, contacts: Vec<Contact>) {
         for stream in listener.incoming() {
             match stream {
                 Ok(mut stream) => {
-                        let mut buffer = [0; 1024];
-                        if let Ok(bytes_read) = stream.read(&mut buffer) {
-                            let received_message = String::from_utf8_lossy(&buffer[..bytes_read]);
-                            let contents: Vec<&str> = received_message.split("%%").collect();
+                    let mut buffer = [0; 1024];
+                    if let Ok(bytes_read) = stream.read(&mut buffer) {
+                        let received_message = String::from_utf8_lossy(&buffer[..bytes_read]);
 
-                            let mut sender = contents.get(0).expect("element not found").to_string();
-                            for contact in contacts.clone() {
-                                // does not work as intended. Can not find address in contacts
-                                if sender == contact.address {
-                                    sender = contact.name;
-                                    break;
-                                }
-                            }
-                            println!("Received message from {}: {}", sender, contents.get(1).expect("element not found").to_string());
+                        println!("raw message: '{}'", received_message);
+
+                        if received_message.trim() == "" {
+                            println!("Received ping message");
+                            continue;
                         }
+
+                        let contents: Vec<&str> = received_message.split("%%").collect();
+
+                        let mut sender = contents.get(0).expect("element not found").to_string();
+                        for contact in contacts.clone() {
+                            println!("Comparing {} with {}", sender, contact.address);
+                            // does not work as intended. Can not find address in contacts
+                            if sender == contact.address {
+                                println!("They are the same!");
+                                sender = contact.name;
+                                break;
+                            }
+                        }
+                        println!("Received message from {}: {}", sender, contents.get(1).expect("element not found").to_string());
+                    }
                 }
                 Err(e) => {
                     eprintln!("Error accepting connection: {}", e);
