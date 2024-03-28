@@ -5,7 +5,7 @@ use std::{result, thread};
 use regex::Regex;
 use std::time::Duration;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct Contact {
     name: String,
     address: String,
@@ -20,13 +20,13 @@ struct Contact {
     - handling typing and message receiving overlap
  */
 
-// message protocol: sender_ip%%message
+// message protocol: username%%message
 
 fn main() {
     let local_ip = "127.0.0.1:".to_string();
 
     println!("Enter your username: ");
-    let _user = get_input().trim().to_string();
+    let user = get_input().trim().to_string();
 
     println!("Enter your port: ");
     let binding = get_input();
@@ -38,7 +38,7 @@ fn main() {
 
     let mut contacts: Vec<Contact> = vec![];
     
-    handle_receiving(address.clone(), contacts.clone());
+    handle_receiving(address.clone());
 
     loop {
         let input = get_input().trim().to_string();
@@ -52,13 +52,10 @@ fn main() {
             contacts = add_contact(contacts);
         } 
         else if input == "send message".to_string() {
-            select_contact_for_chat(address.clone(), contacts.clone());
+            select_contact_for_chat(user.clone(), contacts.clone());
         } 
         else if input == "quit".to_string() {
             break;
-        }
-        else if input == "ping".to_string() {
-            ping_other("127.0.0.1:8081".to_string(), 1);
         }
         else {
             println!("'{}' not recognized as internal command.", input)
@@ -78,7 +75,7 @@ fn is_ip_addr(str: &str) -> bool{
     }
 }
 
-fn ping_other(destination_address: String, timeout: u64) -> bool {
+fn port_is_open(destination_address: String, timeout: u64) -> bool {
     let addr: SocketAddr = destination_address.parse().expect("Invalid address");
 
     match TcpStream::connect_timeout(&addr, Duration::from_secs(timeout)) {
@@ -94,8 +91,7 @@ fn get_input() -> String {
 }
 
 fn print_help() {
-    println!("
-display contacts - prints saved contacts
+    println!("display contacts - prints saved contacts
 add contact      - starts add contact process
 send message     - send a message to contact
 quit             - quits program");
@@ -133,7 +129,7 @@ fn add_contact(mut contacts: Vec<Contact>) -> Vec<Contact> {
     return contacts
 }
 
-fn select_contact_for_chat(address: String, contacts: Vec<Contact>) {
+fn select_contact_for_chat(username: String, contacts: Vec<Contact>) {
     println!("Enter contact name or IP to send a message or enter '_back':");
     let input = get_input().trim().to_string();
 
@@ -142,25 +138,25 @@ fn select_contact_for_chat(address: String, contacts: Vec<Contact>) {
     }
 
     if is_ip_addr(&input) {
-        send_message(address, input);
+        send_message(username, input);
         return;
     }
 
     for contact in contacts.clone() {
         if input == contact.name {
-            send_message(address, contact.address);
+            send_message(username, contact.address);
             return
         }
     }
 
     println!("Input is not valid contact name or IP.");
-    select_contact_for_chat(address, contacts);
+    select_contact_for_chat(username, contacts);
 }
 
-fn send_message(local_address: String, destination_address: String) {
+fn send_message(username: String, destination_address: String) {
     let (sender, receiver) = channel::<String>();
 
-    let input = local_address.to_owned() + "%%" + get_input().trim();
+    let input = username.to_owned() + "%%" + get_input().trim();
     sender.send(input.trim().to_string()).unwrap();
     let message = match receiver.recv() {
         Ok(msg) => msg,
@@ -176,7 +172,7 @@ fn send_message(local_address: String, destination_address: String) {
     }
 }
 
-fn handle_receiving(address: String, contacts: Vec<Contact>) {
+fn handle_receiving(address: String) {
     thread::spawn(move || {
         let listener = TcpListener::bind(&address).expect("Failed to bind to address");
         for stream in listener.incoming() {
@@ -195,16 +191,8 @@ fn handle_receiving(address: String, contacts: Vec<Contact>) {
 
                         let contents: Vec<&str> = received_message.split("%%").collect();
 
-                        let mut sender = contents.get(0).expect("element not found").to_string();
-                        for contact in contacts.clone() {
-                            println!("Comparing {} with {}", sender, contact.address);
-                            // does not work as intended. Can not find address in contacts
-                            if sender == contact.address {
-                                println!("They are the same!");
-                                sender = contact.name;
-                                break;
-                            }
-                        }
+                        let sender = contents.get(0).expect("element not found").to_string();
+                        
                         println!("Received message from {}: {}", sender, contents.get(1).expect("element not found").to_string());
                     }
                 }
