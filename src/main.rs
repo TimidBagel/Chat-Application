@@ -15,8 +15,6 @@ struct Contact {
     TO DO: 
     - function for live chat
     - more robust error handling
-    - message protocol
-    - better command input system
     - handling typing and message receiving overlap
  */
 
@@ -42,23 +40,48 @@ fn main() {
 
     loop {
         let input = get_input().trim().to_string();
-        if input == "help".to_string() {
-            print_help();
+        let separated_by_quotes: Vec<&str> = input.split("\"").collect();
+        let separated_by_spaces: Vec<&str> = separated_by_quotes.get(0).expect("element not found").split(" ").collect();
+        let first_element: &str = separated_by_spaces.get(0).expect("element not found");
+
+        if first_element == "send" {
+            let recipient: &str = separated_by_spaces.get(1).expect("element not found");
+            let message: &str = separated_by_quotes.get(1).expect("element not found");
+            if is_ip_addr(recipient) {
+                send_message(user.clone(), recipient, message);
+                continue;
+            }
+
+            let mut found_contact: bool = false;        
+            for contact in contacts.clone() {
+                if recipient.to_string() == contact.name {
+                    send_message(user.clone(), &contact.address, message);
+                    found_contact = true;
+                }
+            }
+
+            if !found_contact {println!("invalid IP or contact name");}
+            continue;
         } 
-        else if input == "display contacts".to_string() {
-            print_contacts(contacts.clone());
+        else if first_element == "add" {
+            let name = separated_by_spaces.get(1).expect("element not found");
+            let address = separated_by_spaces.get(2).expect("element not found");
+            contacts = add_contact(contacts.clone(), &name, &address);
         } 
-        else if input == "add contact".to_string() {
-            contacts = add_contact(contacts);
-        } 
-        else if input == "send message".to_string() {
-            select_contact_for_chat(user.clone(), contacts.clone());
-        } 
-        else if input == "quit".to_string() {
-            break;
+        else if first_element == "print" {
+            let second_element: &str = separated_by_spaces.get(1).expect("element not found");
+            if second_element == "contacts" {
+                print_contacts(contacts.clone());
+            }
         }
+        else if first_element == "help" {
+            print_help();
+        }
+        else if first_element == "quit" {
+            break;
+        } 
         else {
-            println!("'{}' not recognized as internal command.", input)
+            // invalid input
         }
     }
 
@@ -91,10 +114,11 @@ fn get_input() -> String {
 }
 
 fn print_help() {
-    println!("display contacts - prints saved contacts
-add contact      - starts add contact process
-send message     - send a message to contact
-quit             - quits program");
+    println!("
+print contacts                     - prints list of saved contacts
+send [address or name] \"[message]\" - sends a message to a specified recipient
+add [name] [address]               - adds a new contact with specified name and IP address
+quit                               - ends program promptly");
 }
 
 fn print_contacts(contacts: Vec<Contact>) {
@@ -112,16 +136,10 @@ fn print_contacts(contacts: Vec<Contact>) {
     }
 }
 
-fn add_contact(mut contacts: Vec<Contact>) -> Vec<Contact> {
-    println!("Enter new contact name: ");
-    let new_name = get_input().trim().to_string();
-
-    println!("Enter {}'s IP address: ", new_name);
-    let new_address = get_input().trim().to_string();
-
+fn add_contact(mut contacts: Vec<Contact>, new_name: &str, new_address: &str) -> Vec<Contact> {
     let mut new_contact: Vec<Contact> = vec![Contact {
-        name: new_name,
-        address: new_address,
+        name: new_name.to_string(),
+        address: new_address.to_string(),
     }];
 
     contacts.append(&mut new_contact);
@@ -129,35 +147,10 @@ fn add_contact(mut contacts: Vec<Contact>) -> Vec<Contact> {
     return contacts
 }
 
-fn select_contact_for_chat(username: String, contacts: Vec<Contact>) {
-    println!("Enter contact name or IP to send a message or enter '_back':");
-    let input = get_input().trim().to_string();
-
-    if input == "_back".to_string() {
-        return
-    }
-
-    if is_ip_addr(&input) {
-        send_message(username, input);
-        return;
-    }
-
-    for contact in contacts.clone() {
-        if input == contact.name {
-            send_message(username, contact.address);
-            return
-        }
-    }
-
-    println!("Input is not valid contact name or IP.");
-    select_contact_for_chat(username, contacts);
-}
-
-fn send_message(username: String, destination_address: String) {
+fn send_message(username: String, destination_address: &str, message: &str) {
     let (sender, receiver) = channel::<String>();
 
-    let input = username.to_owned() + "%%" + get_input().trim();
-    sender.send(input.trim().to_string()).unwrap();
+    sender.send(username + "%%" + message).unwrap();
     let message = match receiver.recv() {
         Ok(msg) => msg,
         Err(_) => return,
