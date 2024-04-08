@@ -1,0 +1,5 @@
+Chat app features:
+1. E2E encrypton
+2. Image and Video compression + sending
+3. GUI
+4. Cross-network transfers
