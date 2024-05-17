@@ -3,12 +3,12 @@ Note - This script is written by Iain Broomell
 ChatGPT was used during the writing of this script,
 though only for research purposes and redundant tasks, such as adding comments. */
 
+use regex::Regex;
 use std::io::{self, Read, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::sync::mpsc::channel;
-use std::{thread, time};
-use regex::Regex;
 use std::sync::{Arc, Mutex};
+use std::{thread, time};
 
 // Define a struct representing a contact with a name and an address
 #[derive(Clone, Debug)]
@@ -65,10 +65,18 @@ fn main() {
 }
 
 // Function to handle user input
-fn handle_user_input(user: &str, mut contacts: &mut Vec<Contact>, inbox: &Arc<Mutex<Vec<Message>>>) -> Result<bool, String> {
+fn handle_user_input(
+    user: &str,
+    mut contacts: &mut Vec<Contact>,
+    inbox: &Arc<Mutex<Vec<Message>>>,
+) -> Result<bool, String> {
     let input = get_input().trim().to_string(); // Read user input
     let separated_by_quotes: Vec<&str> = input.split('"').collect(); // Separate input by quotes
-    let separated_by_spaces: Vec<&str> = separated_by_quotes.get(0).unwrap_or(&"").split_whitespace().collect(); // Separate input by spaces
+    let separated_by_spaces: Vec<&str> = separated_by_quotes
+        .get(0)
+        .unwrap_or(&"")
+        .split_whitespace()
+        .collect(); // Separate input by spaces
     let first_element = separated_by_spaces.get(0).unwrap_or(&""); // Get the first element of the input
 
     match *first_element {
@@ -99,8 +107,15 @@ fn handle_user_input(user: &str, mut contacts: &mut Vec<Contact>, inbox: &Arc<Mu
 }
 
 // Function to handle the "send" command
-fn send_message_command(user: &str, separated_by_spaces: &[&str], separated_by_quotes: &[&str], contacts: &Vec<Contact>) -> Result<(), String> {
-    let recipient = separated_by_spaces.get(1).ok_or("Recipient not specified")?;
+fn send_message_command(
+    user: &str,
+    separated_by_spaces: &[&str],
+    separated_by_quotes: &[&str],
+    contacts: &Vec<Contact>,
+) -> Result<(), String> {
+    let recipient = separated_by_spaces
+        .get(1)
+        .ok_or("Recipient not specified")?;
     let message = separated_by_quotes.get(1).ok_or("Message not specified")?;
     if is_ip_addr(recipient) {
         send_message(user.to_string(), recipient, message);
@@ -121,9 +136,18 @@ fn send_message_command(user: &str, separated_by_spaces: &[&str], separated_by_q
 }
 
 // Function to handle the "add" command
-fn add_contact_command(contacts: &mut Vec<Contact>, separated_by_spaces: &[&str]) -> Result<(), String> {
-    let name = separated_by_spaces.get(1).ok_or("Name not specified")?.to_string();
-    let address = separated_by_spaces.get(2).ok_or("Address not specified")?.to_string();
+fn add_contact_command(
+    contacts: &mut Vec<Contact>,
+    separated_by_spaces: &[&str],
+) -> Result<(), String> {
+    let name = separated_by_spaces
+        .get(1)
+        .ok_or("Name not specified")?
+        .to_string();
+    let address = separated_by_spaces
+        .get(2)
+        .ok_or("Address not specified")?
+        .to_string();
     contacts.push(Contact { name, address }); // Add a new contact to the contacts vector
     Ok(())
 }
@@ -180,23 +204,28 @@ fn port_is_open(destination_address: String, timeout: u64) -> bool {
 
     match TcpStream::connect_timeout(&addr, time::Duration::from_secs(timeout)) {
         Ok(_) => true,
-        Err(_) => false
+        Err(_) => false,
     }
 }
 
 // Function to get user input
 fn get_input() -> String {
     let mut input = String::new();
-    io::stdin().read_line(&mut input).expect("Failed to read line");
+    io::stdin()
+        .read_line(&mut input)
+        .expect("Failed to read line");
     input
 }
 
 // Function to print help message
 fn print_help() {
-    println!("print contacts                     - prints list of saved contacts
+    println!(
+        "listen                             - prints inbox and incoming messages
+print contacts                     - prints list of saved contacts
 send [address or name] \"[message]\" - sends a message to a specified recipient
 add [name] [address]               - adds a new contact with specified name and IP address
-quit                               - ends program promptly");
+quit                               - ends program promptly"
+    );
 }
 
 // Function to send a message
